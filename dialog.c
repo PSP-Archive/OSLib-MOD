@@ -32,7 +32,7 @@ void ConfigureDialog(pspUtilityMsgDialogParams *inDialog, size_t dialog_size)
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //Public API
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void oslInitMessageDialog(const char *message, int enableYesno){
+int oslInitMessageDialog(const char *message, int enableYesno){
     ConfigureDialog(&dialog, sizeof(dialog));
     dialog.mode = PSP_UTILITY_MSGDIALOG_MODE_TEXT;
 	dialog.options = PSP_UTILITY_MSGDIALOG_OPTION_TEXT;
@@ -41,24 +41,26 @@ void oslInitMessageDialog(const char *message, int enableYesno){
 		dialog.options |= PSP_UTILITY_MSGDIALOG_OPTION_YESNO_BUTTONS|PSP_UTILITY_MSGDIALOG_OPTION_DEFAULT_NO;
 
     strcpy(dialog.message, message);
-    sceUtilityMsgDialogInitStart(&dialog);
-    dialogType = OSL_DIALOG_MESSAGE;
+    int res = sceUtilityMsgDialogInitStart(&dialog);		//<-- STAS: The error code shouldn't be ignored !
+    if (!res) dialogType = OSL_DIALOG_MESSAGE;
+    return res;												//<-- STAS END -->
 }
 
 
-void oslInitErrorDialog(const unsigned int error)
+int oslInitErrorDialog(const unsigned int error)
 {
     ConfigureDialog(&dialog, sizeof(dialog));
     dialog.mode = PSP_UTILITY_MSGDIALOG_MODE_ERROR;
 	dialog.options = PSP_UTILITY_MSGDIALOG_OPTION_ERROR;
     dialog.errorValue = error;
 
-    sceUtilityMsgDialogInitStart(&dialog);
-    dialogType = OSL_DIALOG_ERROR;
+    int res = sceUtilityMsgDialogInitStart(&dialog);		//<-- STAS: The error code shouldn't be ignored !
+    if (!res) dialogType = OSL_DIALOG_ERROR;
+    return res;												//<-- STAS END -->
 }
 
 
-void oslInitNetDialog()
+int oslInitNetDialog()
 {
 	memset(&netConf, 0, sizeof(netConf));
 	netConf.base.size = sizeof(netConf);
@@ -74,8 +76,9 @@ void oslInitNetDialog()
 	memset(&adhocparam, 0, sizeof(adhocparam));
 	netConf.adhocparam = &adhocparam;
 
-	sceUtilityNetconfInitStart(&netConf);
-    dialogType = OSL_DIALOG_NETCONF;
+	int res = sceUtilityNetconfInitStart(&netConf);			//<-- STAS: The error code shouldn't be ignored !
+    if (!res) dialogType = OSL_DIALOG_NETCONF;
+    return res;												//<-- STAS END -->
 }
 
 
@@ -91,34 +94,37 @@ void oslDrawDialog()
 {
     if (dialogType == OSL_DIALOG_MESSAGE || dialogType == OSL_DIALOG_ERROR){
         switch(sceUtilityMsgDialogGetStatus()) {
+			case PSP_UTILITY_DIALOG_INIT:
             case PSP_UTILITY_DIALOG_VISIBLE:
-                oslEndDrawing();
-                sceUtilityMsgDialogUpdate(1);
-                oslStartDrawing();
-                break;
+				sceGuFinish();
+				sceGuSync(0,0);
+				sceUtilityMsgDialogUpdate(1);
+				sceGuStart(GU_DIRECT, osl_list);
+				oslSetAlpha(OSL_FX_RGBA, 0xff);
+				break;
             case PSP_UTILITY_DIALOG_QUIT:
                 sceUtilityMsgDialogShutdownStart();
-                //dialogType = OSL_DIALOG_NONE;
                 break;
             case PSP_UTILITY_DIALOG_NONE:
                 break;
         }
     }else if (dialogType == OSL_DIALOG_NETCONF){
         switch(sceUtilityNetconfGetStatus()){
-            case PSP_UTILITY_DIALOG_NONE:
-                break;
+			case PSP_UTILITY_DIALOG_INIT:
             case PSP_UTILITY_DIALOG_VISIBLE:
-                oslEndDrawing();
-                sceUtilityNetconfUpdate(1);
-                oslStartDrawing();
+				sceGuFinish();
+				sceGuSync(0,0);
+				sceUtilityNetconfUpdate(1);
+				sceGuStart(GU_DIRECT, osl_list);
+				oslSetAlpha(OSL_FX_RGBA, 0xff);
                 break;
             case PSP_UTILITY_DIALOG_QUIT:
                 sceUtilityNetconfShutdownStart();
-                //dialogType = OSL_DIALOG_NONE;
                 break;
+            case PSP_UTILITY_DIALOG_NONE:
             case PSP_UTILITY_DIALOG_FINISHED:
                 break;
-        }
+		}
     }
 }
 
@@ -144,3 +150,52 @@ int oslGetDialogButtonPressed(){
 void oslEndDialog(){
     dialogType = OSL_DIALOG_NONE;
 }
+
+//<-- STAS: -->
+int oslDialogDrawAndWait(int dialogType) {
+    int        status = OSL_DIALOG_STATUS_INIT;
+    OSL_IMAGE* img    = oslCreateImage(480, 272, OSL_IN_RAM, OSL_PF_8888);
+
+    oslSyncDrawing();
+    oslCopyImageTo(img, OSL_DEFAULT_BUFFER);			// Save the currently drawn image
+
+    while((status >= 0)  &&  (status != OSL_DIALOG_STATUS_NONE)  &&  !osl_quit) {
+       if (!oslSyncFrameEx(0,0,1)) {
+          oslStartDrawing();
+          oslCopyImageTo(OSL_DEFAULT_BUFFER, img);		// Restore the image drawn by the user app
+
+          switch (dialogType) {
+             case OSL_DIALOG_MESSAGE:
+             case OSL_DIALOG_ERROR:
+             case OSL_DIALOG_NETCONF:
+                oslDrawDialog();
+                status = oslGetDialogStatus();
+                break;
+             case OSL_DIALOG_OSK:
+                oslDrawOsk();
+                status = oslGetOskStatus();
+                break;
+             case OSL_DIALOG_SAVELOAD:
+                oslDrawSaveLoad();
+                status = oslGetLoadSaveStatus();
+                break;
+             case OSL_DIALOG_BROWSER:
+                oslDrawBrowser();
+                status = oslGetBrowserStatus();
+                break;
+          }
+
+          oslEndDrawing();
+       }
+       oslEndFrame();
+    }
+
+    oslDeleteImage(img);
+    return (status < 0)? status : 0;
+}
+
+
+int oslDialogIsActive() {
+    return (dialogType != OSL_DIALOG_NONE);
+}
+//<-- STAS END -->

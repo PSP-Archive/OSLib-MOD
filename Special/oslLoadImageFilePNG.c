@@ -1,11 +1,11 @@
 #include "../oslib.h"
 #include "../png.h"
 #include "../pngconf.h"
-#include "../zlibinterface.h"
+#include "../zlibInterface.h"
 #include "../zlib.h"
 #include "../zconf.h"
 
-//Lecture / écriture des PNG
+//Lecture / ï¿½criture des PNG
 void oslPngReadFn(png_structp png_ptr, png_bytep data, png_size_t length)			{
 	VIRTUAL_FILE *f = (VIRTUAL_FILE *)png_get_io_ptr(png_ptr);
 	VirtualFileRead(data, length, 1, f);
@@ -23,7 +23,7 @@ OSL_IMAGE *oslLoadImageFilePNG(char *filename, int location, int pixelFormat)
 	//We only keep the location bits
 	int imgLocation = location & OSL_LOCATION_MASK;
 	int i;
-
+	
 	f = VirtualFileOpen((void*)filename, 0, VF_AUTO, VF_O_READ);
 	if (!f)
 		goto error;
@@ -33,8 +33,7 @@ OSL_IMAGE *oslLoadImageFilePNG(char *filename, int location, int pixelFormat)
 		goto error;
 	}
 
-	if (png_check_sig(signature, nSigSize) == 0)
-	{
+	if (png_check_sig(signature, nSigSize) == 0) {
 		goto error;
 	}
 
@@ -83,7 +82,7 @@ OSL_IMAGE *oslLoadImageFilePNG(char *filename, int location, int pixelFormat)
 		img = oslCreateImage(width, height, OSL_IN_RAM, pixelFormat);
 	}
 	else
-		//Sinon on crée notre image normalement, directement
+		//Sinon on crï¿½e notre image normalement, directement
 		img = oslCreateImage(width, height, imgLocation, pixelFormat);
 
 	if (img)

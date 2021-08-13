@@ -1,67 +1,36 @@
 #include <pspkernel.h>
-#include <kubridge.h>
 #include "oslib.h"
 #include "usb.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Globals:
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-SceUID modules[7];
+SceUID modules[8];
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Private functions
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int LoadStartModule(char *path)
-{
-    u32 loadResult;
-    u32 startResult;
-    int status;
-
-    loadResult = kuKernelLoadModule(path, 0, NULL);
-    if (loadResult & 0x80000000)
-       return -1;
-
-    startResult = sceKernelStartModule(loadResult, 0, NULL, &status, NULL);
-    if (loadResult != startResult)
-       return -2;
-    return loadResult;
-}
-
-int StopUnloadModule(SceUID modID){
-    int status;
+void oslStopUnloadModule(SceUID modID){
+    int status = 0;
     sceKernelStopModule(modID, 0, NULL, &status, NULL);
     sceKernelUnloadModule(modID);
-    return 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PUBLIC FUNCTIONS
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int oslInitUsbStorage()		{
-	u32 retVal;
+	u32 retVal = 0;
 
     //start necessary drivers
-    modules[0] = LoadStartModule("flash0:/kd/chkreg.prx");
-    if (modules[0] < 0)
-        return -1;
-    modules[1] = LoadStartModule("flash0:/kd/npdrm.prx");
-    if (modules[1] < 0)
-        return -1;
-    modules[2] = LoadStartModule("flash0:/kd/semawm.prx");
-    if (modules[2] < 0)
-        return -1;
-    modules[3] = LoadStartModule("flash0:/kd/usbstor.prx");
-    if (modules[3] < 0)
-        return -1;
-    modules[4] = LoadStartModule("flash0:/kd/usbstormgr.prx");
-    if (modules[4] < 0)
-        return -1;
-    modules[5] = LoadStartModule("flash0:/kd/usbstorms.prx");
-    if (modules[5] < 0)
-        return -1;
-    modules[6] = LoadStartModule("flash0:/kd/usbstorboot.prx");
-    if (modules[6] < 0)
-        return -1;
+	modules[0] = pspSdkLoadStartModule("flash0:/kd/chkreg.prx", PSP_MEMORY_PARTITION_KERNEL);
+    modules[1] = pspSdkLoadStartModule("flash0:/kd/npdrm.prx", PSP_MEMORY_PARTITION_KERNEL);
+    modules[2] = pspSdkLoadStartModule("flash0:/kd/semawm.prx", PSP_MEMORY_PARTITION_KERNEL);
+    modules[3] = pspSdkLoadStartModule("flash0:/kd/usbstor.prx", PSP_MEMORY_PARTITION_KERNEL);
+    modules[4] = pspSdkLoadStartModule("flash0:/kd/usbstormgr.prx", PSP_MEMORY_PARTITION_KERNEL);
+    modules[5] = pspSdkLoadStartModule("flash0:/kd/usbstorms.prx", PSP_MEMORY_PARTITION_KERNEL);
+    modules[6] = pspSdkLoadStartModule("flash0:/kd/usbstorboot.prx", PSP_MEMORY_PARTITION_KERNEL);
+	modules[7] = pspSdkLoadStartModule("flash0:/kd/usbdevice.prx", PSP_MEMORY_PARTITION_KERNEL); 
 
     //setup USB drivers
     retVal = sceUsbStart(PSP_USBBUS_DRIVERNAME, 0, 0);
@@ -75,16 +44,18 @@ int oslInitUsbStorage()		{
     retVal = sceUsbstorBootSetCapacity(0x800000);
     if (retVal != 0)
 		return -8;
+
     return 0;
 }
 
-void oslStartUsbStorage()		{
-    sceUsbActivate(0x1c8);
+int oslStartUsbStorage()		{
+    return sceUsbActivate(0x1c8);
 }
 
-void oslStopUsbStorage()		{
-    sceUsbDeactivate(0x1c8);
+int oslStopUsbStorage()		{
+    int retVal = sceUsbDeactivate(0x1c8);
     sceIoDevctl("fatms0:", 0x0240D81E, NULL, 0, NULL, 0 ); //Avoid corrupted files
+	return retVal;
 }
 
 int oslDeinitUsbStorage()			{
@@ -94,7 +65,8 @@ int oslDeinitUsbStorage()			{
         oslStopUsbStorage();
     sceUsbStop(PSP_USBSTOR_DRIVERNAME, 0, 0);
     sceUsbStop(PSP_USBBUS_DRIVERNAME, 0, 0);
-    for (i=6; i>=0; i--)
-        StopUnloadModule(modules[i]);
+    for (i=7; i>=0; i--)
+		if (modules[i] >= 0)
+			oslStopUnloadModule(modules[i]);
     return 0;
 }

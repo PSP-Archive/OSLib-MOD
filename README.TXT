@@ -1,5 +1,8 @@
 OldSchool Library (OSLib) MOD
 -----------------------------
+Source code online: http://trac2.assembla.com/oslibmod/browser/trunk
+	    svn   : http://svn2.assembla.com/svn/oslibmod/trunk
+
 
 This is a modded versione of OSLib 2.10
 The original OSLib by Brunni can be found here:
@@ -26,5 +29,15 @@ INSTALL
 To install OSLib MOD copy
 libosl.a in $PSPSDK/lib/
 
-copy the oslib directory (containing header files)
-$PSPSDK/include/
+copy the oslib directory (containing header files) in $PSPSDK/include/
+
+
+
+THANKS
+------
+STAS for tha patch fixing many bugs
+pspZorba for his adhoc sample
+MrMr[iCE] for libpspmath 
+InsertWittyName for all the sdk's dialog samples
+Brunni for OSLib
+BenHur for intraFont

@@ -50,7 +50,7 @@ int main(){
     int skip = 0;
 
     initOSLib();
-    oslIntraFontInit(INTRAFONT_CACHE_MED);
+    oslIntraFontInit(INTRAFONT_CACHE_ALL | INTRAFONT_STRING_UTF8); // All fonts loaded with oslLoadIntraFontFile will have UTF8 support
 
     // Load background
     OSL_IMAGE *bkg = oslLoadImageFilePNG("bkg.png", OSL_IN_RAM | OSL_SWIZZLED, OSL_PF_8888);;
@@ -65,16 +65,27 @@ int main(){
         oslIntraFontSetStyle(ltn[i], 1.0f,WHITE,BLACK,INTRAFONT_ALIGN_LEFT);
     }
 
+    OSL_FONT* jpn0 = oslLoadIntraFontFile("flash0:/font/jpn0.pgf", INTRAFONT_CACHE_ALL | INTRAFONT_STRING_SJIS); //japanese font with SJIS support
+    oslIntraFontSetStyle(jpn0, 1.0f,WHITE,BLACK, INTRAFONT_ALIGN_LEFT);
+
+	OSL_FONT* kr0 = oslLoadIntraFontFile("flash0:/font/kr0.pgf", INTRAFONT_STRING_UTF8);  //Korean font (not available on all systems) with UTF-8 encoding
+	oslIntraFontSetStyle(kr0, 0.8f, WHITE, DARKGRAY, 0);                                  //scale to 80%
+
+	OSL_FONT* chn = oslLoadIntraFontFile("flash0:/font/gb3s1518.bwfon", 0);               //chinese font
+	oslIntraFontSetStyle(chn, 0.8f, WHITE, DARKGRAY, 0);                                  //scale to 80%
+
+  float x_scroll1 = 80,x_scroll2 = 225,x_scroll3 = 370, x_scroll4 = 385;
+
     while(!osl_quit){
         if (!skip){
             oslStartDrawing();
             oslDrawImageXY(bkg, 0, 0);
 
             // Draw various text
-            float y = 25;
+            float y = 13;
             oslIntraFontSetStyle(ltn[4], 1.0f,BLACK,WHITE,INTRAFONT_ALIGN_CENTER);
             oslSetFont(ltn[4]);
-            oslDrawString(240, y, "OSLib with intraFont by Sakya");
+            oslDrawStringf(240, y, "OSLib v.%s with intraFont by Sakya", OSL_VERSION);
             oslIntraFontSetStyle(ltn[4], 1.0f,WHITE,BLACK,INTRAFONT_ALIGN_LEFT);
 
             y += 30;
@@ -124,6 +135,12 @@ int main(){
             oslSetFont(ltn[15]);
             oslDrawString(390, y, "both");
 
+/*            y += 20;
+            oslSetFont(ltn[8]);
+            oslDrawString(10, y, "JPN (S-JIS): ");
+            oslSetFont(jpn0);
+            oslDrawString(180, y, "イントラフォント");
+*/
             y += 25;
             oslSetFont(ltn[8]);
             oslDrawString(10, y, "Colors: ");
@@ -178,7 +195,20 @@ int main(){
             oslDrawString(470, y, "right");
             oslIntraFontSetStyle(ltn[8], 1.0f,WHITE,BLACK,0);
 
-            y += 50;
+            y += 20;
+            oslSetFont(ltn[8]);
+            oslDrawString(10,y,"Scrolling: ");
+            oslIntraFontSetStyle(ltn[8],1.0f,WHITE,DARKGRAY,INTRAFONT_SCROLL_LEFT);
+            x_scroll1 = oslIntraFontPrintColumn(ltn[8],x_scroll1,y,80,0,"This text is scrolled to the left.");
+            oslIntraFontSetStyle(ltn[8],1.0f,WHITE,DARKGRAY,INTRAFONT_SCROLL_SEESAW);
+            x_scroll2 = oslIntraFontPrintColumn(ltn[8],x_scroll2,y,90,0,"Back & forth like a seesaw.");
+            oslIntraFontSetStyle(ltn[8],1.0f,WHITE,DARKGRAY,INTRAFONT_SCROLL_RIGHT);
+            x_scroll3 = oslIntraFontPrintColumn(ltn[8],x_scroll3,y,80,0,"Scrolling to the right...");
+            oslIntraFontSetStyle(ltn[8],1.0f,WHITE,DARKGRAY,INTRAFONT_SCROLL_THROUGH);
+            x_scroll4 = oslIntraFontPrintColumn(ltn[8],x_scroll4,y,80,0,"This text is scrolled through.");
+            oslIntraFontSetStyle(ltn[8],1.0f,WHITE,DARKGRAY,0);
+
+            y += 25;
             oslIntraFontSetStyle(ltn[4], 1.0f,BLACK,WHITE,INTRAFONT_ALIGN_CENTER);
             oslSetFont(ltn[4]);
             oslDrawString(240, y, "Press X to quit");

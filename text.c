@@ -1,7 +1,7 @@
 #include "oslib.h"
 #include "intraFont/intraFont.h"
 
-unsigned short intra_options;
+unsigned int intra_options = 0;
 
 OSL_FONT *osl_curFont=NULL;
 OSL_FONT *osl_sceFont=NULL;
@@ -272,14 +272,15 @@ OSL_FONTINFO osl_sceFontInfo=		{
 	1,										// 1 bit par pixel
 	NULL,									// Proportionnelle
 	7, 8, 1,								// 7x8 (1 octet par ligne)
+	0, 0, 0, NULL							//<-- STAS: Initialize ALL the fontinfo fields !
 };
 
-//bitplanes: format (bits par pixel) de la fonte, imagePlanes: format de la texture à remplir (puissance de deux)
+//bitplanes: format (bits par pixel) de la fonte, imagePlanes: format de la texture Ã  remplir (puissance de deux)
 void oslDrawChar1BitToImage(OSL_IMAGE *img, int x0, int y0, int w, int h, int width, int bitPlanes, int imagePlanes, const unsigned char *font)
 {
 	unsigned char v, t, *data;
 	int x,xx,y;
-	//Nombre de pixels par octet en fonction du format (seuls 1, 2, 4 et 8 supportés)
+	//Nombre de pixels par octet en fonction du format (seuls 1, 2, 4 et 8 supportÃ©s)
 	const u8 pixelsPerByte[] = {0, 8, 4, 0, 2, 0, 0, 0, 1};
 
 	for (y=0;y<h;y++)
@@ -315,6 +316,10 @@ OSL_FONT *oslLoadFont(OSL_FONTINFO *fi)
 	f = (OSL_FONT*)malloc(sizeof(OSL_FONT));
 	if (!f)
 		return NULL;
+	memset(f, 0, sizeof(OSL_FONT));					//<-- STAS: Initialize the OSL_FONT structure
+
+    f->fontType = OSL_FONT_OFT;
+
 	//Liste des tailles
 	f->charWidths = (u8*)malloc(256*sizeof(char));
 	if (!f->charWidths)		{
@@ -322,19 +327,20 @@ OSL_FONT *oslLoadFont(OSL_FONTINFO *fi)
 		return NULL;
 	}
 	if (fi->charWidths)		{
-		//Réutilise les tailles fournies
+		//RÃ©utilise les tailles fournies
 		for (i=0;i<256;i++)
 			f->charWidths[i] = fi->charWidths[i];
 //		f->charWidths = fi->charWidths;
 		f->isCharWidthConstant = 0;
 	}
 	else		{
-		//Remplit la table avec les mêmes tailles
+		//Remplit la table avec les mÃªmes tailles
 		for (i=0;i<256;i++)
 			f->charWidths[i] = fi->charWidth;
 		f->isCharWidthConstant = 1;
+		f->charWidth = fi->charWidth;				//<-- STAS: Initialize f->charWidth somehow...
 	}
-	//Position des caractères (pour les fontes non proportionnelles)
+	//Position des caractÃ¨res (pour les fontes non proportionnelles)
 	f->charPositions = (u16*)malloc(256*sizeof(short));
 	if (!f->charPositions)		{
 		free(f->charWidths);
@@ -354,7 +360,7 @@ OSL_FONT *oslLoadFont(OSL_FONTINFO *fi)
 		x += f->charWidths[i] + f->addedSpace;
 	}
 
-	//16x16 caractères
+	//16x16 caractÃ¨res
 	f->img = oslCreateImage(512, (y+1)*fi->charHeight, OSL_IN_RAM, OSL_PF_4BIT);
 	//4 bit texture format
 	imageFormat = 4;
@@ -367,15 +373,15 @@ OSL_FONT *oslLoadFont(OSL_FONTINFO *fi)
 	//La palette
 	f->img->palette = oslCreatePalette(16, OSL_PF_8888);
 	if (!f->img->palette)		{
+		oslDeleteImage(f->img);					//<-- STAS: It would beter to do it before free(f) :-)
 		free(f->charPositions);
 		free(f->charWidths);
 		free(f);
-		oslDeleteImage(f->img);
 		return NULL;
 	}
 
 	if (fi->paletteCount)		{
-		for (i=0;i<fi->paletteCount;i++)
+		for (i=0;i<oslMin(fi->paletteCount,f->img->palette->nElements);i++)		//<-- STAS: check i against oslMin(...) !
 			((unsigned long*)f->img->palette->data)[i] = fi->paletteData[i];
 	}
 	else	{
@@ -388,7 +394,7 @@ OSL_FONT *oslLoadFont(OSL_FONTINFO *fi)
 
 	f->charHeight = fi->charHeight;
 	memset(f->img->data, 0, f->img->totalSize);
-	//Dessine les caractères sur le buffer
+	//Dessine les caractÃ¨res sur le buffer
 	for (i=0;i<256;i++)		{
 		oslDrawChar1BitToImage(f->img, OSL_TEXT_CHARPOSXY(f, i),
 			f->charWidths[i] + f->addedSpace, f->charHeight, fi->lineWidth << pixelplanewidth[fi->pixelFormat - 1],
@@ -399,6 +405,65 @@ OSL_FONT *oslLoadFont(OSL_FONTINFO *fi)
 	return f;
 }
 
+int updateIntraFontCharWidth(OSL_FONT *font, intraFont *intra)
+{
+    if (!font || !intra)
+        return 0;
+
+    font->charHeight = intra->texYSize;
+    if (!font->charWidths){
+        font->charWidths = (u8*)malloc(256*sizeof(char));
+        if (!font->charWidths)
+            return -1;
+    }
+
+    int i = 0;
+    char tchar[2] = "";
+    for (i=0; i<256; i++){
+        tchar[0] = i;
+        font->charWidths[i] = (int)intraFontMeasureText(intra, tchar);
+    }
+    return 0;
+}
+
+OSL_FONT *oslLoadIntraFontFile(const char *filename, unsigned int options)		{
+	OSL_FONT *font = NULL;
+
+    font = (OSL_FONT*)malloc(sizeof(OSL_FONT));
+    if (!font)
+        return NULL;
+	memset(font, 0, sizeof(OSL_FONT));					//<-- STAS: Initialize the OSL_FONT structure
+    font->fontType = OSL_FONT_INTRA;
+    font->intra = intraFontLoad(filename, options);
+    if (!font->intra){
+        free(font);
+        font = NULL;
+        oslHandleLoadNoFailError(filename);
+    }else{
+        intraFontSetStyle(font->intra, 1.0f, 0xFFFFFFFF, 0xFF000000, 0.0f, INTRAFONT_ALIGN_LEFT);
+        font->charWidths = NULL;
+        updateIntraFontCharWidth(font, font->intra);
+        font->charHeight = font->intra->texYSize;
+    }
+    return font;
+}
+
+void oslLoadAltIntraFontFile(OSL_FONT *font, const char *filename)		{
+	if (!font || font->fontType != OSL_FONT_INTRA) return;
+
+    intraFont* alt = intraFontLoad(filename, font->intra->options&~INTRAFONT_CACHE_ALL);
+    if (!alt)
+    {
+        oslHandleLoadNoFailError(filename);
+    }else{
+        intraFontSetStyle(alt, 1.0f, 0xFFFFFFFF, 0xFF000000, 0.0f, INTRAFONT_ALIGN_LEFT);
+		if ( font->charHeight < alt->texYSize )
+			font->charHeight = alt->texYSize;
+        intraFontSetAltFont(font->intra, alt);
+    }
+	return;
+}
+
 OSL_FONT *oslLoadFontFile(const char *filename)		{
 	OSL_FONTINFO fi;
 	OSL_FONT_FORMAT_HEADER fh;
@@ -407,23 +472,16 @@ OSL_FONT *oslLoadFontFile(const char *filename)		{
 	unsigned char tcTaillesCar[256], *tcCaracteres;
 
     char *start = (char *)filename + (strlen(filename) - 4);
-    if (!strncmp(start, ".pgf", 4) || !strncmp(start, ".PGF", 4)){
-        font = (OSL_FONT*)malloc(sizeof(OSL_FONT));
-        font->fontType = OSL_FONT_INTRA;
-        font->intra = intraFontLoad(filename, intra_options);
-        if (!font->intra){
-            free(font);
-            font = NULL;
-            oslHandleLoadNoFailError(filename);
-        }else{
-            intraFontSetStyle(font->intra, 1.0f, 0xFFFFFFFF, 0xFF000000, INTRAFONT_ALIGN_LEFT);
-        }
+    char *bwfon = (char *)filename + (strlen(filename) - 6);			//<-- STAS: BWFON intrafont support
+    if (!strncmp(start, ".pgf", 4)   || !strncmp(start, ".PGF", 4) ||
+        !strncmp(bwfon, ".bwfon", 6) || !strncmp(bwfon, ".BWFON", 6)) {
+        font = oslLoadIntraFontFile(filename, intra_options);
     }else{
         f = VirtualFileOpen((void*)filename, 0, VF_AUTO, VF_O_READ);
         if (f)			{
-            //Lit l'en-tête de la fonte
+            //Lit l'en-tÃªte de la fonte
             VirtualFileRead(&fh, sizeof(fh), 1, f);
-            //Vérifie l'en-tête
+            //VÃ©rifie l'en-tÃªte
             if (!strcmp(fh.strVersion, "OSLFont v01"))		{
                 fi.pixelFormat = fh.pixelFormat;
                 //VERIFIER 1 <= PIXELFORMAT <= 4
@@ -437,17 +495,19 @@ OSL_FONT *oslLoadFontFile(const char *filename)		{
                 fi.charHeight = fh.charHeight;
                 fi.lineWidth = fh.lineWidth;
                 fi.addedSpace = fh.addedSpace;
-                //Lit les données des caractères
+                //Lit les donnÃ©es des caractÃ¨res
                 tcCaracteres = (u8*)malloc(fh.lineWidth*fi.charHeight*256);
+				if (!tcCaracteres)
+					return NULL;
                 if (VirtualFileRead(tcCaracteres, fh.lineWidth*fi.charHeight*256, 1, f) > 0)			{
                     fi.fontdata = tcCaracteres;
                     fi.paletteCount = fh.paletteCount;
                     fi.paletteData = NULL;
-                    //Est-ce qu'il reste encore des couleurs à charger?
+                    //Est-ce qu'il reste encore des couleurs Ã  charger?
                     if (fi.paletteCount > 0)			{
                         fi.paletteData = (unsigned long*)malloc(fi.paletteCount * sizeof(unsigned long));
                         if (fi.paletteData)			{
-                            //Lit les entrées de palette
+                            //Lit les entrÃ©es de palette
                             if (VirtualFileRead(fi.paletteData, fi.paletteCount * sizeof(unsigned long), 1, f) == 0)			{
                                 //Do not use these entries as they were not read correctly
                                 fi.paletteCount = 0;
@@ -456,8 +516,10 @@ OSL_FONT *oslLoadFontFile(const char *filename)		{
                     }
                     //On peut finalement la charger
                     font = oslLoadFont(&fi);
-                    if (fi.paletteData)
+                    if (fi.paletteData){
                         free(fi.paletteData);
+                        fi.paletteData = NULL;
+                    }
                 }
                 free(tcCaracteres);
             }
@@ -473,13 +535,21 @@ OSL_FONT *oslLoadFontFile(const char *filename)		{
 
 void oslDeleteFont(OSL_FONT *f)		{
     if (f->fontType == OSL_FONT_INTRA){
+        if (f->intra->altFont){
+            intraFontUnload(f->intra->altFont);
+            f->intra->altFont = NULL;
+        }
         intraFontUnload(f->intra);
+        f->intra = NULL;
     }else if (f->fontType == OSL_FONT_OFT){
         oslDeleteImage(f->img);
         free(f->charPositions);
+        f->charPositions = NULL;
         free(f->charWidths);
+        f->charWidths = NULL;
     }
     free(f);
+	f = NULL;
 }
 
 void oslDrawTextTileBack(int x, int y, int tX, int tY)		{
@@ -488,7 +558,8 @@ void oslDrawTextTileBack(int x, int y, int tX, int tY)		{
 	OSL_LINE_VERTEX_COLOR32 *vertices;
 	vertices = (OSL_LINE_VERTEX_COLOR32*)sceGuGetMemory(2 * sizeof(OSL_LINE_VERTEX_COLOR32));
 
-	x += osl_curFont->addedSpace;
+//	x += osl_curFont->addedSpace;			//<-- STAS: tX seems to be more appropiate here :-)
+	tX += osl_curFont->addedSpace;			//<-- STAS END -->
 
 	vertices[0].color = color;
 	vertices[0].x = x;
@@ -500,11 +571,16 @@ void oslDrawTextTileBack(int x, int y, int tX, int tY)		{
 	vertices[1].y = y+tY;
 	vertices[1].z = 0;
 
-	oslDisableTexturing();
-	sceGuDrawArray(GU_SPRITES,GU_COLOR_8888|GU_VERTEX_16BIT|GU_TRANSFORM_2D,2,0,vertices);
+    int wasEnable = osl_textureEnabled;
+    oslDisableTexturing();
+
+    sceGuDrawArray(GU_SPRITES,GU_COLOR_8888|GU_VERTEX_16BIT|GU_TRANSFORM_2D,2,0,vertices);
+	sceKernelDcacheWritebackRange(vertices, 2 * sizeof(OSL_LINE_VERTEX_COLOR32)); //SAKYA
+    if (wasEnable)
+        oslEnableTexturing();
 }
 
-//Dessine une tile de la texture sélectionnée. Eviter d'utiliser à l'extérieur.
+//Dessine une tile de la texture sÃ©lectionnÃ©e. Eviter d'utiliser Ã  l'extÃ©rieur.
 void oslDrawTextTile(int u, int v, int x, int y, int tX, int tY)
 {
 	int color = oslBlendColor(osl_textColor);
@@ -532,8 +608,13 @@ void oslDrawTextTile(int u, int v, int x, int y, int tX, int tY)
 	vertices[1].y = y+tY;
 	vertices[1].z = 0;
 
+    int wasEnable = osl_textureEnabled;
 	oslEnableTexturing();
+
 	sceGuDrawArray(GU_SPRITES,GU_TEXTURE_16BIT|GU_COLOR_8888|GU_VERTEX_16BIT|GU_TRANSFORM_2D,2,0,vertices);
+	sceKernelDcacheWritebackRange(vertices, 2 * sizeof(OSL_FAST_VERTEX_COLOR32)); //SAKYA
+    if (!wasEnable)
+        oslDisableTexturing();
 }
 
 void oslDrawChar(int x, int y, unsigned char c)
@@ -542,21 +623,22 @@ void oslDrawChar(int x, int y, unsigned char c)
 		return;
     if (osl_curFont->fontType == OSL_FONT_OFT){
         oslSetTexture(osl_curFont->img);
-        //Dessine le caractère
+        //Dessine le caractÃ¨re
         oslDrawTextTile(OSL_TEXT_CHARPOSXY(osl_curFont, c), x, y, osl_curFont->charWidths[c], osl_curFont->charHeight);
     }else if (osl_curFont->fontType == OSL_FONT_INTRA){
         char temp[2];
         sprintf(temp, "%c", c);
+        y += (int)((float)osl_curFont->charHeight / 2.0) + 1;
         intraFontPrint(osl_curFont->intra, x, y, temp);
     }
 }
 
 void oslDrawString(int x, int y, const char *str)
 {
+    if (!osl_curFont)								//<-- STAS: it would nice to check it here
+        return;										//<-- STAS END -->
     if (osl_curFont->fontType == OSL_FONT_OFT){
         unsigned char c;
-        if (!osl_curFont)
-            return;
         oslSetTexture(osl_curFont->img);
         while(*str)			{
             c = *(unsigned char*)str++;
@@ -564,13 +646,37 @@ void oslDrawString(int x, int y, const char *str)
             x += osl_curFont->charWidths[c];
         }
     }else if (osl_curFont->fontType == OSL_FONT_INTRA){
+        y += (int)((float)osl_curFont->charHeight / 2.0) + 1;
         intraFontPrint(osl_curFont->intra, x, y, str);
     }
 
 }
 
+void oslDrawStringLimited(int x, int y, int width, const char *str)
+{
+    if (!osl_curFont)								//<-- STAS: it would nice to check it here
+        return;										//<-- STAS END -->
+    if (osl_curFont->fontType == OSL_FONT_OFT){
+        int limitX = x + width;
+        unsigned char c;
+        oslSetTexture(osl_curFont->img);
+        while(*str)			{
+            c = *(unsigned char*)str++;
+            if (x + osl_curFont->charWidths[c] > limitX)
+                break;
+            oslDrawTextTile(OSL_TEXT_CHARPOSXY(osl_curFont, c), x, y, osl_curFont->charWidths[c], osl_curFont->charHeight);
+            x += osl_curFont->charWidths[c];
+        }
+    }else if (osl_curFont->fontType == OSL_FONT_INTRA){
+        oslIntraFontPrintColumn(osl_curFont, x, y, width, 0, str);
+    }
+}
+
 void oslDrawTextBox(int x0, int y0, int x1, int y1, const char *text, int format)
 {
+    if (!osl_curFont  ||  osl_curFont->fontType != OSL_FONT_OFT)	//<-- STAS: it would nice to check it here
+        return;														//<-- STAS END -->
+
 	int x,y, x2;
 	unsigned char c;
 	const char *text2;
@@ -595,7 +701,7 @@ newline:
 			//Prochaine ligne
 			x = x0;
 			y += osl_curFont->charHeight;
-			//Trop bas -> terminé
+			//Trop bas -> terminÃ©
 			if (y + osl_curFont->charHeight > y1)
 				break;
 			//Retour -> saute
@@ -609,9 +715,59 @@ newline:
 	}
 }
 
+
+void oslDrawTextBoxByWords(int x0, int y0, int x1, int y1, const char *text, int format)
+{
+	char buffer[50];
+	int contaCaratteri;
+	unsigned char c;
+	int x,y, x2; //x2 => width della parola
+	x = x0;
+	y = y0;
+    const char *text2;
+    text2=text;
+    while(*text2)
+    {
+        memset(buffer,'\0',50);
+        //estrae una parola
+        contaCaratteri = 0;
+		x2 = 0;
+        while (*text2 != '\n' && *text2 != ' ' && *text2) {
+            contaCaratteri++;
+			text2++;
+        }
+        if (contaCaratteri > 0 ) {
+            strncpy( buffer, text, contaCaratteri);
+			x2 = oslGetStringWidth(buffer);
+			if ((x+x2)> x1)
+            {
+            	x = x0;
+				y += osl_curFont->charHeight;
+				if (y > y1) break;
+
+            }
+            oslDrawString(x, y, buffer);
+			text+=contaCaratteri;
+			x += x2;
+        }
+        if (*text2 == ' ') {
+			c = *text;
+            x += osl_curFont->charWidths[c];
+			text2++; text++;
+        }
+        if (*text2 == '\n') {
+			x = x0;
+			y += osl_curFont->charHeight;
+			if (y> y1) break;
+			text2++; text++;
+        }
+    }
+}
+
+
 void oslInitConsole()
 {
-	//Charge et utilise la fonte système
+	//Charge et utilise la fonte systÃ¨me
 	if (!osl_sceFont)
 		osl_sceFont = oslLoadFont(&osl_sceFontInfo);
 	oslSetFont(osl_sceFont);
@@ -633,6 +789,13 @@ void oslConsolePrint(const char *str)
 	unsigned char c;
 //	if (!osl_consoleOk)
 //		return;
+	OSL_FONT *oldFont = NULL;
+	if (osl_curFont != osl_sceFont)
+	{
+		oldFont = osl_curFont;
+		oslSetFont(osl_sceFont);
+	}
+
 	while(*str)
 	{
 		c = *(unsigned char*)str++;
@@ -640,10 +803,10 @@ void oslConsolePrint(const char *str)
 			oslDrawChar(osl_consolePosX, osl_consolePosY, c);
 			osl_consolePosX += osl_curFont->charWidths[c];
 		}
-		//A droite de l'écran
+		//A droite de l'Ã©cran
 		if (osl_consolePosX+7 > osl_curBuf->sizeX || c=='\n')			{
 			osl_consolePosY += osl_curFont->charHeight;
-			//[MARCHE PAS, TESTER] Trop bas -> défile
+			//[MARCHE PAS, TESTER] Trop bas -> dÃ©file
 			if (osl_consolePosY + osl_curFont->charHeight > osl_curBuf->sizeY)		{
 				osl_consolePosY -= osl_curFont->charHeight;
 				oslSyncDrawing();
@@ -654,27 +817,16 @@ void oslConsolePrint(const char *str)
 			osl_consolePosX = 0;
 		}
 	}
+
+	if (oldFont != NULL)
+		oslSetFont(oldFont);
 }
 
 void oslSetTextColor(OSL_COLOR color)			{
-/*	if (!osl_curFont)
-		return;
-	oslSyncDrawing();
-	((unsigned long*)osl_curFont->img->palette->data)[1] = color;
-	osl_curPalette = NULL;
-	sceKernelDcacheWritebackInvalidateRange(osl_curFont->img->palette->data, 16*4);*/
-//	osl_textColor = (color & 0xf0) >> 4 | (color & 0xf000) >> 8 | (color & 0xf00000) >> 12 | (color & 0xf0000000) >> 16;
 	osl_textColor = color;
 }
 
 void oslSetBkColor(OSL_COLOR color)			{
-/*	if (!osl_curFont)
-		return;
-	oslSyncDrawing();
-	((unsigned long*)osl_curFont->img->palette->data)[0] = color;
-	osl_curPalette = NULL;
-	sceKernelDcacheWritebackInvalidateRange(osl_curFont->img->palette->data, 16*4);*/
-//	osl_textBkColor = (color & 0xf0) >> 4 | (color & 0xf000) >> 8 | (color & 0xf00000) >> 12 | (color & 0xf0000000) >> 16;
 	osl_textBkColor = color;
 }
 
@@ -688,7 +840,7 @@ int oslGetStringWidth(const char *str)
     if (osl_curFont->fontType == OSL_FONT_OFT){
         unsigned char c;
 
-        //Parcourt tous les caractères
+        //Parcourt tous les caractÃ¨res
         while(*str)			{
             c = *(unsigned char*)str++;
             x += osl_curFont->charWidths[c];
@@ -699,8 +851,60 @@ int oslGetStringWidth(const char *str)
 	return x;
 }
 
+int oslGetTextBoxByWordsHeight(int width, int maxHeight, const char *text, int format)
+{
+	char buffer[50];
+	int contaCaratteri;
+	unsigned char c;
+	int x,y, x2; //x2 => width della parola
+	x = 0;//x0;
+	y = 0;//y0;
+    const char *text2;
+    text2=text;
+    while(*text2)
+    {
+        memset(buffer,'\0',50);
+        //estrae una parola
+        contaCaratteri = 0;
+		x2 = 0;
+        while (*text2 != '\n' && *text2 != ' ' && *text2) {
+            contaCaratteri++;
+			text2++;
+        }
+        if (contaCaratteri > 0 ) {
+            strncpy( buffer, text, contaCaratteri);
+			x2 = oslGetStringWidth(buffer);
+			if ((x+x2)> width)
+            {
+            	x = width;
+				y += osl_curFont->charHeight;
+				if (y > maxHeight) break;
+
+            }
+ 			text+=contaCaratteri;
+			x += x2;
+        }
+        if (*text2 == ' ') {
+			c = *text;
+            x += osl_curFont->charWidths[c];
+			text2++; text++;
+        }
+        if (*text2 == '\n') {
+			x = width;
+			y += osl_curFont->charHeight;
+			if (y> maxHeight) break;
+			text2++; text++;
+        }
+    }
+
+	return y;
+}
+
 int oslGetTextBoxHeight(int width, int maxHeight, const char *text, int format)
 {
+    if (!osl_curFont  ||  osl_curFont->fontType != OSL_FONT_OFT)	//<-- STAS: it would nice to check it here
+        return 0;													//<-- STAS END -->
+
 	int x,y, x2;
 	unsigned char c, newLine = 1;
 	const char *text2;
@@ -733,7 +937,7 @@ newline:
 				text++;
 			continue;
 		}
-		//Trop bas -> terminé
+		//Trop bas -> terminÃ©
 		if (y + osl_curFont->charHeight > maxHeight && maxHeight > 0)
 			break;
 		if (newLine)
@@ -745,17 +949,32 @@ newline:
 	return y;
 }
 
-
-int oslIntraFontInit(unsigned short options){
+int oslIntraFontInit(unsigned int options){
     intra_options = options;
+    osl_intraInit = 1;
     return intraFontInit();
 }
 
 void oslIntraFontShutdown(){
+    osl_intraInit = 0;
+    intra_options = 0;
     intraFontShutdown();
 }
 
-void oslIntraFontSetStyle(OSL_FONT *f, float size, unsigned int color, unsigned int shadowColor, unsigned short options){
-    if (f->intra)
-        intraFontSetStyle(f->intra, size, color, shadowColor, options);
+void oslIntraFontSetStyle(OSL_FONT *f, float size, unsigned int color, unsigned int shadowColor, unsigned int options){
+    if (f->intra){
+        intraFontSetStyle(f->intra, size, color, shadowColor, 0.f, options);
+        updateIntraFontCharWidth(f, f->intra);
+        if(f->intra->altFont)
+            intraFontSetStyle(f->intra->altFont, size, color, shadowColor, 0.f, options);
+    }
+}
+
+float oslIntraFontPrintColumn(OSL_FONT *f, float x, float y, float width, int autoBreakLine, const char *text)
+{
+    if (f->intra){
+        y += (int)((float)osl_curFont->charHeight / 2.0f) + 1;
+        return intraFontPrintColumn(f->intra, x, y, width, autoBreakLine, text);
+    }
+    return 0;
 }

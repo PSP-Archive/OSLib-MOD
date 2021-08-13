@@ -5,9 +5,6 @@
 #ifndef _OSLIB_H_
 #define _OSLIB_H_
 
-/** OSLib version */
-#define OSL_VERSION "MOD 1.0.0"
-
 #ifdef PSP
 	#include <pspkernel.h>
 	#include <pspdisplay.h>
@@ -27,8 +24,10 @@
 	#include <pspctrl.h>
 	#include <psputility.h>
 	#include <pspgu.h>
+	#include <pspgum.h>
 	#include <psppower.h>
 	#include <pspiofilemgr.h>
+	#include <psphprm.h>
 #endif
 
 #ifdef __cplusplus
@@ -36,9 +35,9 @@ extern "C" {
 #endif
 
 
-/** @defgroup main
+/** @defgroup main Main
 
-	Main OSLib section.
+    Main OSLib section.
 	@{
 */
 
@@ -47,6 +46,11 @@ extern "C" {
 	Contains general routines to initialize and terminate the library.
 	@{
 */
+
+/** OSLib version */
+#define OSL_VERSION "MOD 1.1.2"
+
+extern int osl_intraInit;
 
 /** Initializes the library. The options for the flags parameters are for advanced users only, let it to zero if you're beginning.
 
@@ -465,7 +469,7 @@ oslPrintf("Welcome...\n");
 \endcode */
 #define oslCls()				 	(oslClearScreen(0), oslMoveTo(0,0))
 /** Moves the cursor to a place on the screen. The x, y coordinates are indicated in terms of characters (by default 8x8 pixels, but depends on the current font). */
-#define oslMoveTo(x,y)				(osl_consolePosX=x*osl_curFont->charWidths['0'], osl_consolePosY=y*osl_curFont->charHeight)
+#define oslMoveTo(x,y)				(osl_consolePosX=x*osl_sceFont->charWidths['0'], osl_consolePosY=y*osl_sceFont->charHeight)
 
 /** @} */ // end of main_debug
 
@@ -579,7 +583,9 @@ extern inline int oslShowNeoflashLogo()		{
 															oslPrintf(str,##format); })*/
 
 
-#include "vfpu.h"
+//#include "vfpu.h"
+#include "oslmath.h"
+
 #include "vram_mgr.h"
 #include "VirtualFile.h"
 #include "drawing.h"
@@ -593,6 +599,11 @@ extern inline int oslShowNeoflashLogo()		{
 #include "dialog.h"
 #include "osk.h"
 #include "saveload.h"
+#include "net.h"
+#include "browser.h"
+#include "adhoc/pspadhoc.h"
+#include "ccc.h"
+#include "sfont.h"
 
 #ifdef __cplusplus
 }

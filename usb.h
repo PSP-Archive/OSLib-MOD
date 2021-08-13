@@ -7,22 +7,27 @@
 
 #define oslGetUsbState sceUsbGetState
 
-/** @defgroup Usb
+/** @defgroup Usb USB
 
-	USB functions to start/stop usb storage
+    USB functions to start/stop usb storage
 	@{
 */
 
-enum {OSL_USB_ACTIVATED=PSP_USB_ACTIVATED, OSL_USB_CABLE_CONNECTED=PSP_USB_CABLE_CONNECTED, OSL_USB_CONNECTION_ESTABLISHED=PSP_USB_CONNECTION_ESTABLISHED};
+enum {OSL_USB_ACTIVATED=PSP_USB_ACTIVATED,
+      OSL_USB_CABLE_CONNECTED=PSP_USB_CABLE_CONNECTED,
+	  OSL_USB_CONNECTION_ESTABLISHED=PSP_USB_CONNECTION_ESTABLISHED};
 
-/** Initializes USB modules, must be called before oslStartUsbStorage. */
+/** Initializes USB modules, must be called before oslStartUsbStorage.
+Returns 0 on success.*/
 extern int oslInitUsbStorage();
 
-/** Starts USB storage */
-extern void oslStartUsbStorage();
+/** Starts USB storage
+Returns 0 on success.*/
+extern int oslStartUsbStorage();
 
-/** Stops USB storage */
-extern void oslStopUsbStorage();
+/** Stops USB storage
+Returns 0 on success.*/
+extern int oslStopUsbStorage();
 
 /** Deinitializes USB modules. */
 extern int oslDeinitUsbStorage();

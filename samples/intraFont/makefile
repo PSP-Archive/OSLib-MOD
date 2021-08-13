@@ -11,7 +11,12 @@ PSP_FW_VERSION=371
 
 LIBDIR =
 LDFLAGS =
-LIBS =  -losl -lpng -lz -lpspaudiolib -lpspaudio -lpspsdk -lpspctrl -lpspumd -lpsprtc -lpsppower -lpspgum -lpspgu -lm
+
+MYLIBS=
+STDLIBS= -losl -lpng -lz \
+         -lpsphprm -lpspsdk -lpspctrl -lpspumd -lpsprtc -lpsppower -lpspgu -lpspgum  -lpspaudiolib -lpspaudio -lpsphttp -lpspssl -lpspwlan \
+         -lpspnet_adhocmatching -lpspnet_adhoc -lpspnet_adhocctl -lm -ljpeg
+LIBS=$(STDLIBS) $(MYLIBS)
 
 EXTRA_TARGETS = EBOOT.PBP
 PSP_EBOOT_TITLE = intraFont Test

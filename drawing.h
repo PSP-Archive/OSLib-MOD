@@ -21,9 +21,9 @@ extern "C" {
 
 
 
-/** @defgroup drawing
+/** @defgroup drawing Drawing
 
-	Drawing in OSLib.
+    Drawing in OSLib.
 	@{
 */
 
@@ -105,6 +105,9 @@ extern void oslClearScreen(int backColor);
 
 Note: oslSetDrawBuffer automatically adjusts the clipping region to cover the full the drawbuffer image. */
 extern void oslSetScreenClipping(int x0, int y0, int x1, int y1);
+
+/** Sets the depth test. */
+extern void oslSetDepthTest(int enabled);
 
 /** Resets the screen clipping to the whole screen. */
 #define oslResetScreenClipping()					oslSetScreenClipping(0, 0, osl_curBuf->sizeX, osl_curBuf->sizeY);
@@ -199,7 +202,7 @@ extern void oslSetDithering(int enabled);
 
 /** Enables color keying. Any pixel of the specified color will not be drawn to the screen.
 
-It has not much interest in itself, but the fact is that it takes effect as well when loading images. Any color equal to this one is set as transparent. As transparency is defined by the alpha channel, 
+It has not much interest in itself, but the fact is that it takes effect as well when loading images. Any color equal to this one is set as transparent. As transparency is defined by the alpha channel,
 you can disable color keying then and the image will still contain transparency.
 
 Example 1: loading an image with a color key. You can often see that the background of some sprite images are of a bright and unconventional color, like pink or bright red. This color is not used
@@ -237,15 +240,15 @@ enum {OSL_FX_NONE=0, OSL_FX_FLAT, OSL_FX_ALPHA, OSL_FX_ADD, OSL_FX_SUB};
 #define OSL_FX_DEFAULT OSL_FX_RGBA
 #define OSL_FX_OPAQUE OSL_FX_NONE
 #define OSL_FX_TINT				(OSL_FX_ALPHA | OSL_FX_COLOR)
-//Cumulable avec les autres pour définir l'utilisation du canal alpha.
+//Cumulable avec les autres pour dÃ©finir l'utilisation du canal alpha.
 #define OSL_FX_RGBA 0x100
-//Coefficients alpha à trois canaux
+//Coefficients alpha Ã  trois canaux
 #define OSL_FX_COLOR 0x1000
 
 
 //Don't access them!
 //extern int osl_currentResolutionBPP;
-//Couleur transparente utilisée au chargement des images.
+//Couleur transparente utilisÃ©e au chargement des images.
 extern int osl_colorKeyValue;
 
 /** @} */ // end of drawing_general
@@ -309,7 +312,7 @@ oslPrintf("%i %i %i %i", red, green, blue, alpha);
 /** Get components from a 5650 (16-bit) color. Same remarks as oslRgbGet4444 apply. */
 #define oslRgbGet5650(data, r, g, b)			((r)=((data)&0x1f)<<3, (g)=(((data)>>5)&0x3f)<<2, (b)=(((data)>>11)&0x1f)<<3)
 
-//Précises - vieilles et lentes
+//PrÃ©cises - vieilles et lentes
 /*#define oslRgbGet5650f(data, r, g, b)			((r)=(((data)&0x1f)*255)/31, (g)=((((data)>>5)&0x3f)*255)/63, (b)=((((data)>>11)&0x1f)*255)/31)
 #define oslRgbaGet5551f(data, r, g, b, a)		((r)=(((data)&0x1f)*255)/31, (g)=((((data)>>5)&0x1f)*255)/31, (b)=((((data)>>10)&0x1f)*255)/31, (a)=(((data)>>15)&0x1)*255)
 #define oslRgbaGet4444f(data, r, g, b, a)		((r)=(((data)&0xf)*255)/15, (g)=((((data)>>4)&0xf)*255)/15, (b)=((((data)>>8)&0xf)*255)/15, (a)=((((data)>>12)&0xf)*255)/15)*/
@@ -428,7 +431,7 @@ typedef struct		{
 	//Rotation
 	int centerX, centerY;					//!< Rotation center
 	int angle;								//!< Angle (rotation) in degrees
-	//Paramètres
+	//ParamÃ¨tres
 //	bool autoStrip;							//!< Automatic stripping (let it one)
 } OSL_IMAGE;
 
@@ -500,7 +503,7 @@ extern OSL_IMAGE *oslLoadImageFileJPG(char *filename, int location, int pixelFor
 /** Loads a GIF file. Same remark as for oslLoadImageFile apply. */
 extern OSL_IMAGE *oslLoadImageFileGIF(char *filename, int location, int pixelFormat);
 
-//Wrapped to by oslSetImageAutoSwizzle. 
+//Wrapped to by oslSetImageAutoSwizzle.
 extern int osl_autoSwizzleImages;
 
 /** Controls whether the images should automatically be swizzled upon loading. You can specify OSL_UNSWIZZLED to get a raw image, which you can then access using the data member of the image.
@@ -523,7 +526,7 @@ extern inline void oslSetImageAutoSwizzle(int enabled)		{
 	Add the following values:
 		- 1: Align the image sizes horizontally to a power of two
 		- 2: Align the vertical size to a multiple of 8 (mandatory for swizzling)
-	
+
 	Default value: 3.
 */
 extern int osl_alignBuffer;
@@ -665,7 +668,7 @@ oslDrawImage(image);
 #define oslImageIsMirroredV(img)				((img)->offsetY1 > (img)->offsetY0)
 
 
-//Donne les coordonnées d'une image de manière à ce qu'avec un angle de 0 le haut-gauche de l'image se trouve à la la position x,y indiquée
+//Donne les coordonnÃ©es d'une image de maniÃ¨re Ã  ce qu'avec un angle de 0 le haut-gauche de l'image se trouve Ã  la la position x,y indiquÃ©e
 /** Moves the image so that its top-left corner appears at the specified x and y coordinates when angle is 0, taking in account rotation parameters. */
 #define oslImageRotMoveX(img,x)			((((x)+(img)->centerX*(img)->stretchX)/(img)->sizeX))
 /** Same as oslImageRotMoveX but for the y coordinate. */
@@ -798,6 +801,12 @@ extern int oslWriteImageFilePNG(OSL_IMAGE *img, const char* filename, int flags)
 /** Resets the properties of an image (position, image tile, angle, rotation center, stretching). */
 extern void oslResetImageProperties(OSL_IMAGE *img);
 
+/** Draws srcImg to dstImg with being scaled. */
+extern void oslScaleImage(OSL_IMAGE *dstImg, OSL_IMAGE *srcImg, int newX, int newY, int newWidth, int newHeight);
+
+/** Creates a scaled copy of an image. */
+extern OSL_IMAGE *oslScaleImageCreate(OSL_IMAGE *img, short newLocation, int newWidth, int newHeight, short newPixelFormat);
+
 /** Look at oslWriteImageFilePNG for more information. */
 enum OSL_WRITE_FLAGS	{
 	OSL_WRI_ALPHA = 1							//!< Writes the alpha channel of the image.
@@ -834,7 +843,7 @@ extern inline void oslSetImageFrameSize(OSL_IMAGE *img, u16 width, u16 height)		
 	img->frameSizeX = width, img->frameSizeY = height;
 }
 
-/** 
+/**
 
 To make a smart use of this feature, remember that you can always code macros to simplify and wrap your code.
 \code
@@ -880,7 +889,7 @@ void main()		{
 	myImage = LoadSpriteFilePNG("test.png", OSL_IN_RAM, OSL_PF_5551, 30, 40);
 	[...]
 
-	//Draw the frame n°2 (that is, the third sprite) at location (0, 0) (top-left corner of the screen).
+	//Draw the frame nÂ°2 (that is, the third sprite) at location (0, 0) (top-left corner of the screen).
 	DrawImageFrameXY(myImage, 0, 0, 2);
 	[...]
 } \endcode */
@@ -951,13 +960,14 @@ extern void oslUncachePalette(OSL_PALETTE *pal);
 	@{
 */
 
-//Nécessaire avant de pouvoir dessiner ou manier l'image (à appeler après une modification du contenu de  img->data à la main)
+//NÃ©cessaire avant de pouvoir dessiner ou manier l'image (Ã  appeler aprÃ¨s une modification du contenu de  img->data Ã  la main)
 /** Flushes the image data from the cache.
 Never forget to call this after you've modified an image in a cached way (by default all the following routines do). See oslUncacheData for more information.
 
 Note: this routine does not flush the associated image palette data! Call oslUncacheImage instead if you need it! */
 extern inline void oslUncacheImageData(OSL_IMAGE *img)		{
-	sceKernelDcacheWritebackInvalidateRange(img->data, img->totalSize);
+    if (img != NULL)
+        sceKernelDcacheWritebackInvalidateRange(img->data, img->totalSize);
 }
 /** Uncache a whole image, including its associated palette (image->palette). */
 extern void oslUncacheImage(OSL_IMAGE *img);
@@ -1480,7 +1490,7 @@ typedef struct
 
 
 
-// *** Général ***
+// *** GÃ©nÃ©ral ***
 
 
 
@@ -1499,7 +1509,7 @@ typedef struct
 
 //Graphique::dessin
 
-//Graphique::écran
+//Graphique::Ã©cran
 
 //Graphique::alpha
 

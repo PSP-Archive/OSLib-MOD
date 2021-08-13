@@ -3,9 +3,9 @@
 int osl_autoSwizzleImages = 1;
 
 /*
-	Crée une image
+	CrÃ©e une image
 
-	L'image fera en réalité sysSizeX*sizeY*pixelDepth octets (sizeY aligné à 8).
+	L'image fera en rÃ©alitÃ© sysSizeX*sizeY*pixelDepth octets (sizeY alignÃ© Ã  8).
 */
 OSL_IMAGE *oslCreateImage(int larg, int haut, short location, short pixelFormat)		{
 	OSL_IMAGE *img;
@@ -28,7 +28,7 @@ OSL_IMAGE *oslCreateImage(int larg, int haut, short location, short pixelFormat)
 	img->alpha.fxCoeffSrc = 0xff;*/
 
 	if (img->sizeX > 512)		{
-		//Plus besoin d'aligner parce que la PSP ne supporte de toute façon pas les textures plus grandes
+		//Plus besoin d'aligner parce que la PSP ne supporte de toute faÃ§on pas les textures plus grandes
 //		img->sysSizeX = (img->sizeX + 511) & ~511;
 		img->sysSizeX = img->sizeX;
 	}
@@ -36,7 +36,7 @@ OSL_IMAGE *oslCreateImage(int larg, int haut, short location, short pixelFormat)
 		img->sysSizeX = oslGetNextPower2(img->sizeX);
 
 	if (img->sizeY > 512)
-		//Plus besoin d'aligner parce que la PSP ne supporte de toute façon pas les textures plus grandes
+		//Plus besoin d'aligner parce que la PSP ne supporte de toute faÃ§on pas les textures plus grandes
 //		img->sysSizeY = (img->sizeY + 511) & ~511;
 		img->sysSizeY = img->sizeY;
 	else
@@ -51,7 +51,7 @@ OSL_IMAGE *oslCreateImage(int larg, int haut, short location, short pixelFormat)
 	oslImageIsSwizzledSet(img, 0);
 	oslImageIsCopySet(img, 0);
 	img->realSizeX = (osl_alignBuffer & 1) ? img->sysSizeX : img->sizeX;
-	//[OPTIMISER] Apparemment, la largeur doit être alignée au quad-word
+	//[OPTIMISER] Apparemment, la largeur doit Ãªtre alignÃ©e au quad-word
 	if (img->realSizeX % (128/osl_pixelWidth[pixelFormat]))			{
 		img->realSizeX /= (128/osl_pixelWidth[pixelFormat]);
 		img->realSizeX ++;
@@ -68,13 +68,13 @@ OSL_IMAGE *oslCreateImage(int larg, int haut, short location, short pixelFormat)
 	img->realSizeY = img->sysSizeY;
 #endif
 
-	//Bidouille pour aligner quand même sysSizeX et sysSizeY
+	//Bidouille pour aligner quand mÃªme sysSizeX et sysSizeY
 	if (img->sizeX > 512)
 		img->sysSizeX = img->realSizeX;
 	if (img->sizeY > 512)
 		img->sysSizeY = img->realSizeY;
 
-	//Taille (en octets) -> pixelWidth est exprimé en bits (multiplié par 8)
+	//Taille (en octets) -> pixelWidth est exprimÃ© en bits (multipliÃ© par 8)
 	img->totalSize = (img->realSizeX*img->realSizeY*osl_pixelWidth[img->pixelFormat])>>3;
 	img->palette = NULL;
 
@@ -100,6 +100,7 @@ void oslDeleteImage(OSL_IMAGE *img)
 			oslDeletePalette(img->palette);
 	}
 	free(img);
+	img = NULL;
 }
 
 
@@ -114,7 +115,10 @@ void oslFreeImageData(OSL_IMAGE *img)		{
 	if (img->data)		{
 		//Free memory depending on the current location
 		if (img->location == OSL_IN_RAM)
+        {
 			free(img->data);
+            img->data = NULL;
+        }
 		else if (img->location == OSL_IN_VRAM)
 			oslVramMgrFreeBlock(img->data, img->totalSize);
 	}
@@ -161,12 +165,15 @@ void *oslAllocImageData(OSL_IMAGE *img, int location)		{
 
 void oslUncacheImage(OSL_IMAGE *img)
 {
-	oslUncacheImageData(img);
-	if (img->palette)
-		oslUncachePalette(img->palette);
+    if (img != NULL)
+    {
+        oslUncacheImageData(img);
+        if (img->palette)
+            oslUncachePalette(img->palette);
+    }
 }
 
-//Copie les données d'une image vers l'autre pour autant que les deux ont des propriétés identiques
+//Copie les donnÃ©es d'une image vers l'autre pour autant que les deux ont des propriÃ©tÃ©s identiques
 void oslCopyImageTo(OSL_IMAGE *imgDst, OSL_IMAGE *imgSrc)
 {
 	if (imgSrc->pixelFormat != imgDst->pixelFormat || imgSrc->totalSize > imgDst->totalSize || imgSrc->realSizeX != imgDst->realSizeX)			{
@@ -174,7 +181,7 @@ void oslCopyImageTo(OSL_IMAGE *imgDst, OSL_IMAGE *imgSrc)
 		return;
 	}
 	else		{
-		//Vide les caches -> pas nécessaire si on indique à l'utilisateur de le faire avant cette copie!
+		//Vide les caches -> pas nÃ©cessaire si on indique Ã  l'utilisateur de le faire avant cette copie!
 		oslUncacheImageData(imgDst);
 		oslUncacheImageData(imgSrc);
 		sceDmacMemcpy(imgDst->data, imgSrc->data, imgSrc->totalSize);
@@ -239,14 +246,16 @@ OSL_IMAGE *oslCreateSwizzledImage(OSL_IMAGE *src, int newLocation)
 	OSL_IMAGE *img;
 	if (!src)
 		return NULL;
+	if (oslImageIsSwizzled(src))
+		return NULL;
 	img = oslCreateImage(src->sizeX, src->sizeY, newLocation, src->pixelFormat);
 	if (img)
 		oslSwizzleImageTo(img, src);
 	return img;
 }
 
-//Vérifie s'il y a besoin de faire un strip blit et le fait. Retourne 1 si le blit a été fait, 0 s'il faut blitter normalement.
-//Attention: ne supporte pas la rotation ou les déformations avancées!
+//VÃ©rifie s'il y a besoin de faire un strip blit et le fait. Retourne 1 si le blit a Ã©tÃ© fait, 0 s'il faut blitter normalement.
+//Attention: ne supporte pas la rotation ou les dÃ©formations avancÃ©es!
 //ATTENTION: UTILISER LA VFPU!
 int oslVerifyStripBlit(OSL_IMAGE *img)		{
 	int i, ud, uf, size;
@@ -302,6 +311,7 @@ int oslVerifyStripBlit(OSL_IMAGE *img)		{
 
 
 void oslSetTexture(OSL_IMAGE *img)		{
+    //int wasEnable = osl_textureEnabled;
 	oslEnableTexturing();
 	if (img->palette && osl_curPalette != img->palette)		{
 		osl_curPalette = img->palette;
@@ -317,6 +327,8 @@ void oslSetTexture(OSL_IMAGE *img)		{
 //		sceGuTexFunc(GU_TFX_REPLACE, img->pixelFormat==OSL_PF_5650?GU_TCC_RGB:GU_TCC_RGBA);
 		sceGuTexImage(0, img->sysSizeX, img->sysSizeY, img->realSizeX, img->data);
 	}
+    /*if (!wasEnable)
+        oslDisableTexturing();*/
 }
 
 
@@ -324,6 +336,8 @@ OSL_IMAGE *oslCreateImageTile(OSL_IMAGE *img, int offsetX0, int offsetY0, int of
 {
 	OSL_IMAGE *newImg;
 	newImg = (OSL_IMAGE*)malloc(sizeof(OSL_IMAGE));
+	if (!newImg)
+		return NULL;
 	memcpy(newImg, img, sizeof(OSL_IMAGE));
 	oslImageIsCopySet(newImg, 1);
 	oslSetImageTile(newImg, offsetX0, offsetY0, offsetX1, offsetY1);
@@ -334,6 +348,8 @@ OSL_IMAGE *oslCreateImageTileSize(OSL_IMAGE *img, int offsetX0, int offsetY0, in
 {
 	OSL_IMAGE *newImg;
 	newImg = (OSL_IMAGE*)malloc(sizeof(OSL_IMAGE));
+	if (!newImg)
+		return NULL;
 	memcpy(newImg, img, sizeof(OSL_IMAGE));
 	oslImageIsCopySet(newImg, 1);
 	oslSetImageTileSize(newImg, offsetX0, offsetY0, width, height);
@@ -345,7 +361,7 @@ void oslSetImageFrame(OSL_IMAGE *img, int frame)		{
 	u32 framesPerLine = img->sizeX / img->frameSizeX;
 	u32 line = frame / framesPerLine;
 
-	img->offsetX0 = (frame - line * framesPerLine) * img->frameSizeX; 
+	img->offsetX0 = (frame - line * framesPerLine) * img->frameSizeX;
 	img->offsetY0 = line * img->frameSizeY;
 	img->offsetX1 = img->offsetX0 + img->frameSizeX;
 	img->offsetY1 = img->offsetY0 + img->frameSizeY;
